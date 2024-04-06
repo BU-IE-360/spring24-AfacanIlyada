@@ -1,0 +1,817 @@
+---
+title: "IE 360 | HW1"
+author: "İlayda Küçükafacan"
+date: "2024-04-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction & Problem Description
+
+Turkey has been sailing through tough economic waters lately, marked by rising inflation, declining national currency, and shifting consumer confidence. In the midst of these difficulties, speculation and discussion have centered on the real estate market. There is a common misconception that inhabitants of nearby nations---Iraq, Iran, Syria, Russia, and Afghanistan, for example---are becoming Turkish citizens and, as a result, driving up property values by making large housing purchases. The rising expense of housing and rent has been attributed to this phenomena, which has reduced the purchasing power of the domestic population.
+
+The goal of this project is to conduct an empirical investigation into the relationships between the various economic statistics that the Central Bank of the Republic of Turkey provides and the impact that new citizenship is thought to have on house prices and sales. We will investigate whether there is a measurable correlation between the Consumer Confidence Index, household financial conditions, the overall state of the economy, and housing sales in Turkey, and specifically in Istanbul, using a combination of time series data manipulation and regression analysis. We will also investigate the quantity of particular visitors---likely new residents---in order to see how it relates to the dynamics of the property market.
+
+In addition to giving the anecdotal observations a statistical basis, our analysis will shed light on the larger economic ramifications of these changes. Using information from Google Trends and the CBRT, we hope to create a story that makes sense and is in line with the current state of Turkey's economy.
+
+### Research Questions
+
+1.  **What impact do changes in the state of the economy have on the selling of real estate or real rents in Turkey, and Istanbul in particular?**
+
+    This inquiry aims to investigate any potential relationships between consumer attitude and real estate purchase decisions, offering insight into the psychological effects of economic indicators on housing markets.
+
+2.  **Is there a statistical connection between the rise in home sales and rental rates in Turkey and the quantity of new citizenships awarded to foreign people, particularly those who come from Iraq, Syria, Iran, Russia, and Afghanistan, besides economic effects?**
+
+    This issue attempts to clarify whether there is factual basis for the idea that new citizenships are the driving force behind the changes in the housing market by evaluating immigration statistics along with home sales and price indices.
+
+3.  **Do external economic factors, such as exchange rate fluctuations, have a more pronounced effect on the real estate market than internal factors like the specific visitors' number?**
+
+    This inquiry seeks to determine which factors---internal social dynamics or external economic pressures---have a greater bearing on the trends in the real estate market.
+
+4.  **Can Google Trends data on citizenship-related search terms predict future trends in house sales in Turkey?**
+
+    This inquiry looks at whether there's a correlation between interest in citizenship/citizenship application searches and real sales by leveraging online search activity.
+
+    \
+
+# Required Packages and Deafult Data Settings
+
+```{r, echo=FALSE}
+install.packages('ggcorrplot')
+install.packages('readxl')
+install.packages('ggplot2')
+install.packages('dplyr')
+install.packages('tidyr')
+install.packages('lubridate')
+install.packages('RColorBrewer')
+install.packages('zoo')
+install.packages('corrplot')
+install.packages('viridis')
+install.packages("tidyverse")
+install.packages("GGally")
+install.packages("dynlm")
+```
+
+```{r}
+library(ggcorrplot)
+library(readxl)
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(lubridate)
+library(RColorBrewer)
+library(zoo)
+library(corrplot)
+library(viridis)
+library(GGally)
+library(forecast)
+```
+
+```{r}
+# Read the combined dataset
+data <- read_csv("/Users/ilyada/Desktop/1/Data1_Gen.csv")
+
+# Ensure the Date column is in the appropriate Date format
+data$Date <- as.Date(paste0(data$Date, "-01"))
+```
+
+```{r}
+list(data)
+```
+
+**Remarks**
+
+-   All variables contain data from 1-1-2020 to 31-12-2023. Here's a compact list of them:
+
+    1.  **Trend:** This is a sequence variable included in the dataset to examine the presence of any temporal trends. It is a simple series that increases by one unit incrementally from 1 up to the number of rows in the dataset.
+
+    2.  **Consumer_Confidence_Index**: This index is sourced from the Central Bank of the Republic of Turkey (CBRT) and reflects consumers' perceptions of economic conditions, including their propensity to make significant purchases such as homes and cars.
+
+    3.  **Households_Fin_Sit**: Also provided by the CBRT, this variable represents the average financial situation of households.
+
+    4.  **Turkey_House_Sales**: This statistic comes from the CBRT and represents the total number of housing sales in Turkey.
+
+    5.  **Istanbul_House_Sales**: Similar to the national house sales data, this statistic is provided by the CBRT and represents the total number of housing sales in Istanbul.
+
+    6.  **Specific_Visitors_Number**: This variable, from the CBRT, totals the number of visitors to Turkey from Iran, Iraq, Syria, Afghanistan, and Russia.
+
+    7.  **Real_Rent**: Derived from the CBRT data, this figure represents the real level of rental prices across Turkey.
+
+    8.  **Dolar_Alis**: This is the buying price of the USD (US Dollar) provided by the CBRT, indicating the exchange rate.
+
+    9.  **Arabic_Citizenship**: Coming from Google Trends, this variable aggregates search queries in Arabic for "stages of naturalization," "citizenship applications," and "conditions of becoming a citizen" ("مراحل التجنيس").
+
+    10. **Istanbul_House_Prices**: Provided by the CBRT, this variable reflects the average purchase price of homes in Istanbul.
+
+## Inspecting Category Variables
+
+```{r data, echo=FALSE, fig.width=12, fig.height=12, dpi=300}
+
+# Increase default plot size (example for R Markdown output)
+options(repr.plot.width = 12, repr.plot.height = 12)
+
+ggpairs(data, progress=FALSE)
+```
+
+**Target Variables Correlations**:
+
+1.  **Arabic_Citizenship**: This variable shows a high positive correlation with "Dolar_Alis" (0.953) and "Real_Rent" (0.909), suggesting that as the exchange rate and rents increase, there might be an increase in the citizenship granted, possibly indicating investment-driven citizenships.
+
+2.  **Turkey_House_Sales**: This variable has a very high positive correlation with "Istanbul_House_Sales" (0.981), implying that house sales in Istanbul are a strong predictor of national house sales, which could be expected if Istanbul represents a large portion of the national market.
+
+3.  **Real_Rent**: The correlation is strong with "Dolar_Alis" (0.942) and "Arabic_Citizenship" (0.909), indicating that increases in rent may be associated with the exchange rate and possibly the number of citizenships granted to Arabic nationals.
+
+**Notes**
+
+-   **Predictor Variables**: In terms of predictor variables for the three target variables, we need to look for those with the highest absolute correlations that are also meaningful from an economic standpoint. For example, exchange rates and perhaps other economic indicators could be strong predictors, but care must be taken to understand the direction of causality.
+
+-   **Model Implications**: When building the three time series models, we will need to consider not just the correlation but also the potential for multicollinearity, the impact of outliers, the stationarity of the series, and any time-based dependencies such as trends or seasonality.
+
+-   **Multicollinearity**: There is evidence of multicollinearity, given the high correlation between variables like "Dolar_Alis" and "Real_Rent." This will need to be addressed in the time series models, possibly by using techniques like Principal Component Analysis (PCA) for dimensionality reduction or regularization to penalize complex models.
+
+# Model 1
+
+1.  **What impact do changes in the state of the economy have on the selling/prices of real estate or real rents in Turkey, and Istanbul in particular?**
+
+## Visualization
+
+```{r}
+library(ggplot2)
+library(readr)
+library(lubridate)
+library(scales)
+
+# Read the combined dataset
+data <- read_csv("/Users/ilyada/Desktop/1/Data1_Gen.csv")
+summary(data)
+
+# Ensure the Date column is in the appropriate Date format
+data$Date <- as.Date(paste0(data$Date, "-01"))
+
+# Extract Year and Month
+data$Year <- year(data$Date)
+data$Month <- month(data$Date)
+```
+
+## 1.1. Visualization of Istanbul House Sales
+
+```{r}
+
+# Plot
+ggplot(data, aes(x = factor(Month), y = Istanbul_House_Sales, fill = factor(Month))) +
+  geom_bar(stat = "identity", color = "black") +
+  facet_wrap(~Year, nrow = 3, ncol = 2) +
+  theme(legend.position = "none",
+        axis.ticks.x = element_blank(),
+        axis.text.x = element_blank()) +
+  scale_fill_viridis_d(begin = 0.2, end = 0.9, direction = 1, option = "A") +
+  labs(x="Months", y="Istanbul House Sales", title="Histogram of Monthly Istanbul House Sales")
+
+# Time series line plot with points
+ggplot(data, aes(x=Date, y=Istanbul_House_Sales)) +
+  geom_line() +
+  geom_point(color="coral") +
+  theme_minimal() +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b %Y") +
+  theme(axis.text.x = element_text(angle=45, hjust=1)) +
+  labs(x="Date", y="Istanbul House Sales", title="Monthly Istanbul House Sales Over Time") +
+  scale_y_continuous(labels=scales::comma)
+
+# Create the box plot
+ggplot(data, aes(x=Year, y=Istanbul_House_Sales)) +
+  geom_boxplot(aes(fill=factor(year(Date)))) +  # Fill box by Year for color distinction
+  theme_minimal() +
+  theme(legend.position = "none") +  # Remove legend
+  labs(x="Year", y="Istanbul House Sales", title="Yearly Distribution of Istanbul House Sales") +
+  scale_fill_viridis_d()  # Use viridis discrete color scale for better visuals
+```
+
+A clear seasonal trend can be seen in the visual data analysis of Istanbul house sales, with some months continuously registering greater sales numbers than others. Although there is considerable annual variety, a comparison of house sales year over year indicates a rising trend. The boxplot suggests that sales numbers have been fluctuating more over time, suggesting that the housing market is becoming more dynamic and thus more prone to abrupt changes. Sales peaks may be caused by a number of things, including as market incentives, economic policies, or other outside events.
+
+## 1.2. Visualization of Istanbul House Prices
+
+```{r}
+# Plot
+ggplot(data, aes(x = factor(Month), y = Istanbul_House_Prices, fill = factor(Month))) +
+  geom_bar(stat = "identity", color = "black") +
+  facet_wrap(~Year, nrow = 3, ncol = 2) +
+  theme(legend.position = "none",
+        axis.ticks.x = element_blank(),
+        axis.text.x = element_blank()) +
+  scale_fill_viridis_d(begin = 0.2, end = 0.9, direction = 1, option = "D") +
+  labs(x="Months", y="Istanbul_House_Prices", title="Histogram of Monthly Istanbul House Prices")
+
+# Time series line plot with points
+ggplot(data, aes(x=Date, y=Istanbul_House_Prices)) +
+  geom_line() +
+  geom_point(color="coral") +
+  theme_minimal() +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b %Y") +
+  theme(axis.text.x = element_text(angle=45, hjust=1)) +
+  labs(x="Date", y="Istanbul House Prices", title="Monthly Istanbul House Prices Over Time") +
+  scale_y_continuous(labels=scales::comma)
+
+# Create the box plot
+ggplot(data, aes(x=Year, y=Istanbul_House_Prices)) +
+  geom_boxplot(aes(fill=factor(year(Date)))) +  # Fill box by Year for color distinction
+  theme_minimal() +
+  theme(legend.position = "none") +  # Remove legend
+  labs(x="Year", y="Istanbul House Prices", title="Yearly Distribution of Istanbul House Prices") +
+  scale_fill_viridis_d()  # Use viridis discrete color scale for better visuals
+```
+
+The price of houses has been steadily rising throughout the years, with bigger price ranges being seen in each succeeding year. It appears from the steadily rising trend that Istanbul's housing costs have been rapidly increasing. Every year, the median house price has increased, and the price spread has widened as well, suggesting that average prices are rising along with the range of prices.
+
+## 1.3. Visualization of Real Rent
+
+```{r}
+
+# Plot
+ggplot(data, aes(x = factor(Month), y = Real_Rent, fill = factor(Month))) +
+  geom_bar(stat = "identity", color = "black") +
+  facet_wrap(~Year, nrow = 3, ncol = 2) +
+  theme(legend.position = "none",
+        axis.ticks.x = element_blank(),
+        axis.text.x = element_blank()) +
+  scale_fill_viridis_d(begin = 0.2, end = 0.9, direction = 1, option = "E") +
+  labs(x="Months", y="Real Rent", title="Histogram of Monthly Real Rent")
+
+# Time series line plot with points
+ggplot(data, aes(x=Date, y=Real_Rent)) +
+  geom_line() +
+  geom_point(color="coral") +
+  theme_minimal() +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b %Y") +
+  theme(axis.text.x = element_text(angle=45, hjust=1)) +
+  labs(x="Date", y="Real Rent", title="Monthly Real Rent Over Time") +
+  scale_y_continuous(labels=scales::comma)
+
+# Create the box plot
+ggplot(data, aes(x=Year, y=Real_Rent)) +
+  geom_boxplot(aes(fill=factor(year(Date)))) +  # Fill box by Year for color distinction
+  theme_minimal() +
+  theme(legend.position = "none") +  # Remove legend
+  labs(x="Year", y="Real Rent", title="Yearly Distribution of Real Rent") +
+  scale_fill_viridis_d()  # Use viridis discrete color scale for better visuals
+```
+
+The accompanying visualizations show a gradual growth in Istanbul real rent from 2020 to 2023, with a notable spike in the latter half of that year. Plots of the time series highlight the consistent increase during the measured duration. The box plots show how rents have spread out over time, showing rising unpredictability along with the main upward trend.
+
+## 1.4. Visualization of Specific Visitors' Number
+
+```{r}
+
+# Plot
+ggplot(data, aes(x = factor(Month), y = Specific_Visitors_Number, fill = factor(Month))) +
+  geom_bar(stat = "identity", color = "black") +
+  facet_wrap(~Year, nrow = 3, ncol = 2) +
+  theme(legend.position = "none",
+        axis.ticks.x = element_blank(),
+        axis.text.x = element_blank()) +
+  scale_fill_viridis_d(begin = 0.2, end = 0.9, direction = 1, option = "F") +
+  labs(x="Months", y="Specific Visitors Number", title="Histogram of Monthly Specific Visitors Number")
+
+# Time series line plot with points
+ggplot(data, aes(x=Date, y=Specific_Visitors_Number)) +
+  geom_line() +
+  geom_point(color="coral") +
+  theme_minimal() +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b %Y") +
+  theme(axis.text.x = element_text(angle=45, hjust=1)) +
+  labs(x="Date", y="Specific Visitors Number", title="Monthly Specific Visitors Number Over Time") +
+  scale_y_continuous(labels=scales::comma)
+
+# Create the box plot
+ggplot(data, aes(x=Year, y=Specific_Visitors_Number)) +
+  geom_boxplot(aes(fill=factor(year(Date)))) +  # Fill box by Year for color distinction
+  theme_minimal() +
+  theme(legend.position = "none") +  # Remove legend
+  labs(x="Year", y="Specific Visitors Number", title="Yearly Distribution of Specific Visitors Number") +
+  scale_fill_viridis_d()  # Use viridis discrete color scale for better visuals
+```
+
+The number of visitors increases significantly in the later months of the year, suggesting a seasonal pattern or perhaps an event that attracts more visitors during that time. There's a clear cyclical pattern with peaks and troughs. The peaks might indicate a time of year with increased visitor activity, which seems to be consistent annually. It\'s noticeable that there's an upward trend in the median number of visitors each year, indicating growth over time.
+
+## 1.5. Visualization of Households' Financial Situtation
+
+```{r}
+# Plot
+ggplot(data, aes(x = factor(Month), y = Households_Fin_Sit, fill = factor(Month))) +
+  geom_bar(stat = "identity", color = "black") +
+  facet_wrap(~Year, nrow = 3, ncol = 2) +
+  theme(legend.position = "none",
+        axis.ticks.x = element_blank(),
+        axis.text.x = element_blank()) +
+  scale_fill_viridis_d(begin = 0.2, end = 0.9, direction = 1, option = "G") +
+  labs(x="Months", y="Households' Financial Situation", title="Histogram of Monthly Households' Financial Situation")
+
+# Time series line plot with points
+ggplot(data, aes(x=Date, y=Households_Fin_Sit)) +
+  geom_line() +
+  geom_point(color="coral") +
+  theme_minimal() +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b %Y") +
+  theme(axis.text.x = element_text(angle=45, hjust=1)) +
+  labs(x="Date", y="Households' Financial Situation", title="Monthly Households' Financial Situation Over Time") +
+  scale_y_continuous(labels=scales::comma)
+
+# Create the box plot
+ggplot(data, aes(x=Year, y=Households_Fin_Sit)) +
+  geom_boxplot(aes(fill=factor(year(Date)))) +  # Fill box by Year for color distinction
+  theme_minimal() +
+  theme(legend.position = "none") +  # Remove legend
+  labs(x="Year", y="Households' Financial Situation", title="Yearly Distribution of Households' Financial Situation") +
+  scale_fill_viridis_d()  # Use viridis discrete color scale for better visuals
+```
+
+The consistent height of the bars across months suggests a stable financial situation without significant monthly fluctuations. A time series from 2019 to a timeframe that looks to extend into 2023 is displayed on the line graph. The financial status of the households fluctuates more dramatically in this graph, with dips and rises. The tendency appears to be increasing over time, which could indicate a general improvement in the state of the economy or could be a reflection of seasonal or economic cycles. The median household financial condition shows a general increasing tendency, suggesting that households may be getting better off year on average. But in some years, there are anomalies or a greater range of data points, indicating that various households have varied financial circumstances.\
+
+## 1.6. Visualization of Consumer Confidence Index
+
+```{r}
+
+# Plot
+ggplot(data, aes(x = factor(Month), y = Consumer_Confidence_Index, fill = factor(Month))) +
+  geom_bar(stat = "identity", color = "black") +
+  facet_wrap(~Year, nrow = 3, ncol = 2) +
+  theme(legend.position = "none",
+        axis.ticks.x = element_blank(),
+        axis.text.x = element_blank()) +
+  scale_fill_viridis_d(begin = 0.2, end = 0.9, direction = 1, option = "B") +
+  labs(x="Months", y="Consumer Confidence Index", title="Histogram of Monthly Consumer Confidence Index")
+
+# Time series line plot with points
+ggplot(data, aes(x=Date, y=Consumer_Confidence_Index)) +
+  geom_line() +
+  geom_point(color="coral") +
+  theme_minimal() +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b %Y") +
+  theme(axis.text.x = element_text(angle=45, hjust=1)) +
+  labs(x="Date", y="Households' Financial Situation", title="Monthly Consumer Confidence Index Over Time") +
+  scale_y_continuous(labels=scales::comma)
+
+# Create the box plot
+ggplot(data, aes(x=Year, y=Consumer_Confidence_Index)) +
+  geom_boxplot(aes(fill=factor(year(Date)))) +  # Fill box by Year for color distinction
+  theme_minimal() +
+  theme(legend.position = "none") +  # Remove legend
+  labs(x="Year", y="Consumer Confidence Index", title="Yearly Distribution of Consumer Confidence Index") +
+  scale_fill_viridis_d()  # Use viridis discrete color scale for better visuals
+```
+
+Although there is considerable variance across months, the height of the bars indicates that the confidence levels are generally constant throughout each year. There are obvious oscillations, with certain peaks and troughs signifying different customer confidence levels. After a notable decline, there seems to be a general recovery in confidence, with sporadic declines that may be connected to occurrences in the economy or seasonal changes. There is some variance from year to year, with certain years exhibiting a greater range of consumer confidence levels, which may signify times of economic instability or transition.
+
+## 1.7. Visualization of Exchange Rate (\$)
+
+```{r}
+
+# Plot
+ggplot(data, aes(x = factor(Month), y = Dolar_Alis, fill = factor(Month))) +
+  geom_bar(stat = "identity", color = "black") +
+  facet_wrap(~Year, nrow = 3, ncol = 2) +
+  theme(legend.position = "none",
+        axis.ticks.x = element_blank(),
+        axis.text.x = element_blank()) +
+  scale_fill_viridis_d(begin = 0.2, end = 0.9, direction = 1, option = "D") +
+  labs(x="Months", y="Exchange Rate", title="Histogram of Monthly Exchange Rate")
+
+# Time series line plot with points
+ggplot(data, aes(x=Date, y=Dolar_Alis)) +
+  geom_line() +
+  geom_point(color="coral") +
+  theme_minimal() +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b %Y") +
+  theme(axis.text.x = element_text(angle=45, hjust=1)) +
+  labs(x="Date", y="Exchange Rate", title="Monthly Exchange Rate Over Time") +
+  scale_y_continuous(labels=scales::comma)
+
+# Create the box plot
+ggplot(data, aes(x=Year, y=Dolar_Alis)) +
+  geom_boxplot(aes(fill=factor(year(Date)))) +  # Fill box by Year for color distinction
+  theme_minimal() +
+  theme(legend.position = "none") +  # Remove legend
+  labs(x="Year", y="Exchange Rate", title="Yearly Distribution of Exchange Rate") +
+  scale_fill_viridis_d()  # Use viridis discrete color scale for better visuals
+```
+
+It is evident that the bars gradually get taller as each year draws to a finish, indicating an increasing trend in the values of the exchange rates over time. Starting in late 2021, there is a notable increasing trend that keeps going up sharply. Over this time frame, the trend shows a steady growth in exchange rate values. The annual median values appear to be rising, which suggests that exchange rates have increased during these years. The boxes' spread and range indicate that the exchange rates fluctuate and are volatile from year to year.
+
+## 1.8. Visualization of Arabic Citizenship Related Keyword Search
+
+```{r}
+
+# Plot
+ggplot(data, aes(x = factor(Month), y = Arabic_Citizenship, fill = factor(Month))) +
+  geom_bar(stat = "identity", color = "black") +
+  facet_wrap(~Year, nrow = 3, ncol = 2) +
+  theme(legend.position = "none",
+        axis.ticks.x = element_blank(),
+        axis.text.x = element_blank()) +
+  scale_fill_viridis_d(begin = 0.2, end = 0.9, direction = 1, option = "H") +
+  labs(x="Months", y="Arabic Citizenship Keyword Search", title="Histogram of Monthly Arabic Citizenship Keyword Search")
+
+# Time series line plot with points
+ggplot(data, aes(x=Date, y=Arabic_Citizenship)) +
+  geom_line() +
+  geom_point(color="coral") +
+  theme_minimal() +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b %Y") +
+  theme(axis.text.x = element_text(angle=45, hjust=1)) +
+  labs(x="Date", y="Arabic Citizenship Keyword Search", title="Monthly Arabic Citizenship Keyword Search Over Time") +
+  scale_y_continuous(labels=scales::comma)
+
+# Create the box plot
+ggplot(data, aes(x=Year, y=Arabic_Citizenship)) +
+  geom_boxplot(aes(fill=factor(year(Date)))) +  # Fill box by Year for color distinction
+  theme_minimal() +
+  theme(legend.position = "none") +  # Remove legend
+  labs(x="Year", y="Arabic Citizenship Keyword Search", title="Yearly Distribution of Arabic Citizenship Keyword Search") +
+  scale_fill_viridis_d()  # Use viridis discrete color scale for better visuals
+```
+
+The number of searches has increased noticeably over time, with 2023 having especially high search counts in the final months. With some significant oscillations, the graph shows a general increase in the number of searches over time. There are peaks that might line up with certain incidents or governmental adjustments that aroused public curiosity. There seems to be a growing and expanding interest in the topic as the median search frequency seems to be rising annually and the spread of searches in each year widens.
+
+## Comparisons
+
+-   The peaks in Istanbul house sales do not appear to correlate directly with the patterns observed in the specific visitors graph, suggesting that the factors driving real estate sales are different from those influencing visitor numbers.
+
+-   The household financial situation and consumer confidence graphs both show signs of recovery and growth over time, but the confidence index has more pronounced fluctuations. This could mean that while the overall financial situation is improving, consumer sentiment is more sensitive to short-term factors.
+
+-   The upward trends in the financial situation and consumer confidence might be expected to correlate with increased house sales, as improved financial circumstances and confidence can lead to more real estate investment. However, the house sales graph indicates that other factors are also at play, given its variability.
+
+-   The simultaneous increase in the cost of homes, rent, and currency may point to a larger economic trend in Istanbul, such as inflation or a property market boom, which may be driven by foreign investment or regional economic policy.
+
+-   If the market is dependent on a foreign currency or is impacted by the dynamics of foreign investment, the increase in the exchange rate may also have an impact on rent and home prices.
+
+-   The trend of searches for "Arabic Citizenship" does not appear to be directly correlated with economic variables such as the exchange rate or the cost of homes and rent. This tendency may have broader political or social roots, and it may be a reflection of interest in citizenship as a result of Istanbul's economic potential.
+
+# Regression Models
+
+## 1. Regression Model on Real Rent
+
+### 1.1. Raw Model
+
+```{r}
+data0 <- read_csv("/Users/ilyada/Desktop/1/Data1_Gen.csv")
+# Ensure the Date column is in the appropriate Date format
+data0$Date <- as.Date(paste0(data0$Date, "-01"))
+
+
+#log-transform used to stabilze variance
+l_fit1.1 = lm(log(Real_Rent) ~ .,data=data0) #log-transform used to stabilze variance
+l_fit1.1
+summary(l_fit1.1)
+checkresiduals(l_fit1.1,12)
+```
+
+#### Comments
+
+-   **Turkey_House_Sales**, **Istanbul_House_Sales**, **Specific_Visitors_Number**, **Dolar_Alis**, **Arabic_Citizenship**: These variables are not statistically significant at the typical alpha levels of 0.05, 0.01, etc.
+
+-   **Consumer_Confidence_Index**: This predictor is highly significant (p-value \< 0.001) and negative, indicating a strong negative association with the dependent variable.
+
+-   **Households_Fin_Sit**: Also highly significant (p-value \< 0.001) with a positive coefficient, indicating a strong positive association with the dependent variable.
+
+-   **Istanbul_House_Prices**: Statistically significant at the 0.01 level, with a positive association with the dependent variable.
+
+The overall fit of the model seems to be very good, with a multiple R-squared of 0.9838, indicating that about 98.38% of the variability in the dependent variable is explained by the model. The adjusted R-squared, which adjusts for the number of predictors, is also very high (0.9788), suggesting that the model fits the data well and is not unduly complicated.
+
+The F-statistic is very large (198.3), and with a p-value practically at zero, it indicates that the overall model is statistically significant, and there is a relationship between the predictors and the dependent variable.
+
+1.  **Residuals Plot**: This plot should ideally show no clear pattern. The presence of patterns can indicate non-linearity, autocorrelation, or other violations of the regression assumptions. The plot of our raw model that all variables included shows some patterns that suggest the possibility of non-linear relationships not captured by the model.
+
+2.  **ACF Plot**: The plot shows significant autocorrelation at several lags, as indicated by the bars extending beyond the blue dashed significance bounds. This suggests that the residuals are not independent of one another, which violates one of the key assumptions of linear regression.
+
+3.  **Histogram of Residuals**: This suggests the residuals are approximately normally distributed, but there might be some slight deviation from normality, the plot seem like left-skewed. The existence of longer tails is indicated by the spikes at the far ends of the histogram, which suggests potential outliers or heavy tails not captured by the normal distribution.
+
+4.  **Breusch-Godfrey Test**: The test result indicates that there is significant autocorrelation in the residuals (p-value = 0.0006285), which means that the residuals are not independent across observations. This can occur in time-series data where subsequent values are correlated with past values.
+
+```{r}
+cor_matrix <- cor(data0[, sapply(data0, is.numeric)], use = "complete.obs", method = "pearson")
+
+# Visualizing the correlation matrix
+ggcorrplot(cor_matrix, hc.order = TRUE, type = "lower",
+           lab = TRUE, lab_size = 2, tl.srt = 45, # Use tl.srt to rotate labels
+           lab_col = "black", sig.level = 0.0)
+```
+
+It's important to check whether the indicator variables are correlated among themselves. After fitting linear regression models, we'll check them as well.\
+
+```{r}
+#Irrelevant indicators due to research question is discarded
+#Other economic situation indicators are discarded since Households_Fin_Sit is a better indicator for real rent levels (asked Vedat Akgiray)
+l_fit1.2 = lm(log(Real_Rent) ~ . - Consumer_Confidence_Index - Specific_Visitors_Number - Arabic_Citizenship,data=data0)
+l_fit1.2
+summary(l_fit1.2)
+checkresiduals(l_fit1.2,12)
+```
+
+-   The **`Istanbul_House_Prices`** variable has a significant positive effect on **`log(Real_Rent)`** at the 0.01 level, indicating that as house prices in Istanbul increase, there is a significant increase in the percentage change in real rent.
+
+-   **`Households_Fin_Sit`** shows a positive coefficient, suggesting that an improvement in households' financial situation is associated with an increase in the percentage change in real rent, but the p-value indicates only marginal significance.
+
+-   Other variables such as **`Date`**, **`Trend`**, **`Turkey_House_Sales`**, **`Istanbul_House_Sales`**, **`Dolar_Alis`**, and **`log(House_Prices)`** are not statistically significant, which suggests that they may not have a strong linear effect on **`log(Real_Rent)`** or there might be collinearity issues that obscure their effects.
+
+-   The adjusted R-squared is very high (0.9643), suggesting that the model explains a significant portion of the variability in **`log(Real_Rent)`**.
+
+-   The residual standard error is relatively low, and the distribution of residuals does not deviate significantly from normality, which is positive for the model assumptions.
+
+-   However, the Breusch-Godfrey test indicates significant autocorrelation in the residuals, which violates the assumption of independence and suggests that the model might be improved by addressing this issue.
+
+The residual analysis shows an approximate normal distribution with constant variance, which supports some of the linear regression assumptions. However, the presence of autocorrelation, as evidenced by the ACF plot and confirmed by the Breusch-Godfrey test, indicates that the model may benefit from incorporating time series elements or lagged variables to account for this temporal dependency.
+
+```{r}
+#Category variable selection
+selected_corr <- cor_matrix[
+  c("Trend","Turkey_House_Sales", "Households_Fin_Sit", "Istanbul_House_Sales", "Istanbul_House_Prices", "Dolar_Alis"),
+  c("Trend","Turkey_House_Sales", "Households_Fin_Sit","Istanbul_House_Sales", "Istanbul_House_Prices", "Dolar_Alis")]
+
+ggcorrplot(selected_corr, 
+           hc.order = TRUE, 
+           type = "lower",
+           lab = TRUE)
+```
+
+The linear regression model "l_fit1.2" identifies **`Istanbul_House_Prices`** as a key factor influencing the log-transformed real rent, although the relationship is marginally significant. The lagged variables **`Real_Rent_lag1`** and **`Real_Rent_lag11`** are highly significant, revealing the temporal dynamics within the real estate market.
+
+Despite the high significance of the lagged variables, the presence of autocorrelation, as revealed by the Breusch-Godfrey test, suggests that additional temporal structure may need to be accounted for in the model. This could include exploring further lags or considering time-series modeling approaches that can better capture the correlation between observations over time.
+
+**Note:** The model exhibits an extremely high fit, with an Adjusted R-squared of 0.9983, indicating that nearly all the variance in the log of real rent is explained by the predictors in the model. However, the exceptionally high R-squared value should be approached with caution, as it may indicate overfitting, especially considering the small sample size after the deletion of observations due to lag inclusion.
+
+-   The model predicts the log of **`Real_Rent`**, with **`Istanbul_House_Prices`** showing a near-significant p-value (0.061), suggesting an important relationship with the log of real rent.
+
+-   **`Real_Rent_lag1`** and **`Real_Rent_lag11`** are included as lagged independent variables and are highly significant, indicating that past values of real rent have a strong influence on the current value, which may capture autoregressive behavior in the series.
+
+-   The residuals plot shows no clear patterns, suggesting that the model does not suffer from obvious non-linearity or heteroscedasticity.
+
+-   The ACF plot shows some significant autocorrelation at certain lags, as indicated by the bars that cross the blue dashed significance bounds. *(They had been taken care of for lag1 and lag11)*
+
+-   The histogram of residuals seems to suggest a fairly normal distribution, although with a sharp peak, which could imply some kurtosis in the distribution of residuals.
+
+-   The test for serial correlation up to lag 12 is significant (p-value = 0.01111), indicating that autocorrelation is still present in the residuals and should be addressed.
+
+```{r}
+data0$Real_Rent_lag1 <- lag(data0$Real_Rent, 1)
+data0$Real_Rent_lag11 <- lag(data0$Real_Rent, 11)
+data0$Real_Rent_lag15 <- lag(data0$Real_Rent, 15)
+
+l_fit1.3 = lm(log(Real_Rent) ~ .-Households_Fin_Sit - Consumer_Confidence_Index - Specific_Visitors_Number- Dolar_Alis - Arabic_Citizenship + Real_Rent_lag1 + Real_Rent_lag11 - Real_Rent_lag15 + Real_Rent_lag1,data=data0)
+l_fit1.3
+summary(l_fit1.3)
+checkresiduals(l_fit1.3,12)
+```
+
+**`Istanbul_House_Prices`** plays a significant role in predicting the variations in the real rent levels. The model results and diagnostics highlight the importance of this variable, reflecting the economic intuition that housing prices in a major market like Istanbul would indeed be indicative of rent levels. Given Istanbul's substantial impact on national housing market trends, it is logical to observe its house prices as a determinant of rent prices.
+
+However, while **`Istanbul_House_Prices`** is an influential factor, the model also hints at the complexity of the real estate market, as indicated by the necessity to incorporate lagged variables to capture the dynamic nature of rent prices. This inclusion of temporal elements suggests that past rent prices exert a lasting influence on current rents, a reflection of potential inertia or trends in the housing market.
+
+The exclusion of variables such as **`Households_Fin_Sit`** in the presence of high multicollinearity allows for a more stable model where **`Istanbul_House_Prices`** becomes a standout predictor. This decision underscores a methodological consideration in regression modeling---balancing the inclusion of diverse factors with the need to minimize statistical distortions that can arise from closely interrelated variables.
+
+The regression model sheds light on the dynamics of real rent pricing, with **`Istanbul_House_Prices`** emerging as a critical predictor. This is consistent with market observations, as Istanbul's property market significantly influences nationwide trends. The connection between house sales prices and rent levels in Istanbul is not surprising, considering the city's leading role in Turkey's real estate economy. With Istanbul's housing prices being a major contributor to the overall housing price index in Turkey, the model corroborates the economic theory that these prices have a consequential impact on the rents. In examining the rental and sales market, we observe that property sale prices in Istanbul are a bellwether for understanding fluctuations in real rent levels.
+
+Then, let's try to find out what drivers in play for house prices.
+
+# Model 2
+
+## 2.1 Raw Model
+
+```{r}
+
+data0 <- read_csv("/Users/ilyada/Desktop/1/Data1_Gen.csv")
+# Ensure the Date column is in the appropriate Date format
+data0$Date <- as.Date(paste0(data0$Date, "-01"))
+
+
+#log-transform used to stabilze variance
+l_fit2.1 = lm(log(Istanbul_House_Prices) ~ .,data=data0) #log-transform used to stabilze variance
+l_fit2.1
+summary(l_fit2.1)
+checkresiduals(l_fit2.1,12)
+```
+
+-   The significant coefficient of "Dolar_Alis" in the regression model predicting log-transformed Istanbul house prices underscores the impact of exchange rates on the housing market. This assumed to be attributed to the dependence of construction costs on imported materials, which are affected by exchange rate fluctuations.
+
+-   The inclusion of the lagged variable of Istanbul house prices indicates that past prices are predictive of current ones, reflecting the continuity and perhaps speculative trends in the real estate market.
+
+-   The high R-squared value suggests that the model explains a large proportion of the variance in house prices, with the exchange rate being a key driver.
+
+It's clear that "Istanbul_House_Prices" and "Real_Rent" is highly related. But when we look other variables, "Dolar_Alis" and "Arabic_Citizenship" came into play. Let's dive in their correlations.
+
+```{r}
+#Category variable selection
+selected_corr2 <- cor_matrix[
+  c("Real_Rent","Dolar_Alis", "Arabic_Citizenship"),
+  c("Real_Rent","Dolar_Alis", "Arabic_Citizenship")]
+
+ggcorrplot(selected_corr2, 
+           hc.order = TRUE, 
+           type = "lower",
+           lab = TRUE)
+```
+
+-   According to economic literature, the cost of building materials, often influenced by exchange rates, can significantly affect both house prices and rental levels. The results from the regression analysis align with this theory, as changes in the "Dolar_Alis" appear to have a direct and substantial impact on "Istanbul_House_Prices."
+
+-   The financial indicators such as "Households_Fin_Sit" and "Consumer_Confidence_Index" likely influence the exchange rate, which in turn, creates a cascading effect impacting real rent levels and housing prices. This relationship illustrates how macroeconomic factors are interlinked with the real estate market, suggesting that the exchange rate serves as a transmission mechanism through which broader economic conditions are reflected in the housing sector.
+
+-   But what about "Arabic_Citizenship"? *(Check out 2.3 Version)*
+
+## 2.2 Version
+
+```{r}
+# We created a lagged version of the dependent variable since ACF indicates significant dependences.
+data0$Istanbul_House_Prices_lag1 <- lag(data0$Istanbul_House_Prices, 1)
+data0$Istanbul_House_Prices_lag2 <- lag(data0$Istanbul_House_Prices, 2)
+data0$Istanbul_House_Prices_lag3 <- lag(data0$Istanbul_House_Prices, 3)
+
+l_fit2.2 = lm(log(Istanbul_House_Prices) ~ Dolar_Alis+Istanbul_House_Prices_lag1+Istanbul_House_Prices_lag2++Istanbul_House_Prices_lag3,data=data0)
+
+l_fit2.2
+summary(l_fit2.2)
+checkresiduals(l_fit2.2,12)
+```
+
+The analysis indicates that the exchange rate, denoted as "Dolar_Alis," is closely linked to Istanbul's real estate market. This connection is supported by economic theories which propose that construction costs---strongly influenced by the exchange rate---play a critical role in determining house prices and rental rates. As the exchange rate fluctuates, it directly affects the cost of imported construction materials, thereby influencing the pricing trends in Istanbul's housing market.
+
+The financial climate in Turkey, as captured by indicators such as "Households_Fin_Sit" and "Consumer_Confidence_Index," appears to exert a substantial influence on the exchange rate. This relationship then ripples through to the real estate market, suggesting a pronounced knock-on effect whereby economic conditions influence the exchange rate, which in turn, affects both the cost of housing and the levels of real rent. This pattern underscores the interconnectedness of macroeconomic variables with the housing sector, and the pivotal role of the exchange rate in mediating these effects.
+
+## 2.3 Verison
+
+-   What about "Arabic_Citizenship"?
+
+```{r}
+
+# We created a lagged version of the dependent variable (here we use 'lag(Real_Rent, 1)' to indicate a lag of one period) since ACF indicates significant dependences.
+data0$Istanbul_House_Prices_lag1 <- lag(data0$Istanbul_House_Prices, 1) # no need to use -1, just 1 for a lag of one period
+data0$Istanbul_House_Prices_lag2 <- lag(data0$Istanbul_House_Prices, 2)
+data0$Istanbul_House_Prices_lag3 <- lag(data0$Istanbul_House_Prices, 3)
+
+l_fit2.3 = lm(log(Istanbul_House_Prices) ~ Arabic_Citizenship,data=data0)
+
+l_fit2.3
+summary(l_fit2.3)
+checkresiduals(l_fit2.3,12)
+```
+
+-   The residuals plot shows variability around zero but no clear trend or pattern, which might suggest that the model does capture much of the systematic structure in the data.
+
+-   The ACF plot shows evidence of autocorrelation at several lags, as indicated by bars extending beyond the blue dashed significance bounds, which is concerning for a regression model's residuals.
+
+-   The histogram of the residuals indicates a distribution that has a peak close to the center and a spread that suggests moderate variability, with a possible slight skewness, although not excessively pronounced.
+
+-   The significant result from the Breusch-Godfrey test (p-value = 0.007619) further corroborates the presence of autocorrelation within the residuals, indicating that there might be a temporal dependency that the current model does not account for.
+
+Given these results, while the model identifies a clear statistical relationship between the presence of Arabic citizenship related Google search and house prices in Istanbul, the data suggests that other dynamic factors are at play that affect house prices over time, which are not fully captured by this model. The presence of autocorrelation hints that house prices in Istanbul might be influenced by past prices or other time-dependent variables not included in the model. Further investigation using time series analysis might be warranted to adequately model these dynamics.
+
+This analysis should be considered in the broader context of Istanbul's real estate market, where multiple economic and social factors interact complexly to influence house prices, beyond the scope of a single variable like **`Arabic_Citizenship`**.
+
+> While a statistical correlation between the presence of Arabic citizenship Google search and the increase in house prices in Istanbul is observed, it is crucial to recognize that correlation does not imply causation. The underlying economic conditions within Turkey play a more substantial role in influencing the housing market dynamics. The observed correlation may suggest that, following an economic downturn, while house prices have risen, the relative stability of foreign currencies like the dollar may make property investment more attractive to foreign buyers. Consequently, there could be an uptick in searches related to obtaining citizenship, which may facilitate or be associated with investment behaviors, rather than being driven by a primary desire to acquire Turkish citizenship. This pattern reflects a strategic response to economic conditions, where foreign investors capitalize on the opportunity presented by a devalued local currency to make real estate investments.
+
+# Model 3
+
+2.  **Is there a statistical connection between the rise in home sales and rental rates in Turkey and the quantity of new citizenships awarded to foreign people, particularly those who come from Iraq, Syria, Iran, Russia, and Afghanistan besides economic effects?**
+
+```{r}
+data0 <- read_csv("/Users/ilyada/Desktop/1/Data1_Gen.csv")
+# Ensure the Date column is in the appropriate Date format
+data0$Date <- as.Date(paste0(data0$Date, "-01"))
+
+#Irrelevant indicators due to research question is discarded
+l_fit3.1 = lm(log(Istanbul_House_Prices) ~ Specific_Visitors_Number+Arabic_Citizenship,data=data0) #log-transform used to stabilze variance
+l_fit3.1
+summary(l_fit3.1)
+checkresiduals(l_fit3.1,12)
+```
+
+-   **`Specific_Visitors_Number`** does not appear to have a significant effect on **`Istanbul_House_Prices`** based on the p-value of 0.874.
+
+-   **`Arabic_Citizenship`** has a small but significant positive coefficient, suggesting a relationship between the number of Arabic citizens and the house prices in Istanbul.
+
+-   The intercept is highly significant, which is to be expected as it represents the log price when the predictors are at zero.
+
+-   The residual plot shows some fluctuations and a possible pattern that could indicate a non-linear relationship or missing variables that have not been captured by the model.
+
+-   The ACF plot reveals some significant autocorrelation at various lags, as evidenced by the bars exceeding the blue dashed significance lines, suggesting that the residuals are not independent.
+
+-   The histogram shows a distribution of residuals that deviates from normality, particularly indicating potential right skewness or outliers, as evidenced by the long tail to the right.
+
+-   The significant result (p-value = 0.007763) suggests that there is autocorrelation in the residuals, which is a violation of one of the key assumptions of linear regression.
+
+The regression analysis indicates that **`Arabic_Citizenship`** is statistically significant and positively related to **`Istanbul_House_Prices`**. This could reflect the impact of foreign investment or demand on the housing market. The variable **`Specific_Visitors_Number`** does not show a significant association with house prices, suggesting that visitor numbers may not be a determining factor in this context or that the effect is masked by other unaccounted factors.
+
+The model's R-squared is quite high, indicating a good fit to the data. However, the residual diagnostics suggest that there might be additional complexity in the relationship between the predictors and the housing prices that has not been fully accounted for. The presence of autocorrelation in the residuals, confirmed by the Breusch-Godfrey test, points to the need for further investigation, potentially through the inclusion of additional lagged variables, model refinement, or consideration of different modeling techniques that can account for serial correlation in time series data.
+
+```{r}
+#Category variable selection
+selected_corr <- cor_matrix[
+  c("Specific_Visitors_Number", "Dolar_Alis", "Arabic_Citizenship", "Istanbul_House_Prices"),
+  c("Specific_Visitors_Number", "Dolar_Alis", "Arabic_Citizenship", "Istanbul_House_Prices")]
+
+ggcorrplot(selected_corr, 
+           hc.order = TRUE, 
+           type = "lower",
+           lab = TRUE)
+```
+
+## 3.2 Version
+
+```{r}
+
+data0$Istanbul_House_Prices_lag1 <- lag(data0$Istanbul_House_Prices, 1)
+data0$Istanbul_House_Prices_lag2 <- lag(data0$Istanbul_House_Prices, 2)
+data0$Istanbul_House_Prices_lag3 <- lag(data0$Istanbul_House_Prices, 3)
+
+#Irrelevant indicators due to research question is discarded
+#log-transform used to stabilze variance
+l_fit3.2 = lm(log(Istanbul_House_Prices) ~ Arabic_Citizenship,data=data0) 
+l_fit3.2
+summary(l_fit3.2)
+checkresiduals(l_fit3.2,12)
+```
+
+-   The regression output indicates that **`Arabic_Citizenship`** is a significant predictor of the logarithm of **`Istanbul_House_Prices`**. The positive coefficient suggests that as the number of Arabic citizens increases, there is a corresponding increase in the house prices in Istanbul. The Intercept is significantly different from zero, which indicates the expected value of **`log(Istanbul_House_Prices)`** when **`Arabic_Citizenship`** is zero.
+
+-   There seems to be a pattern in the residuals, which might suggest that the model does not capture all the predictive structure in the data.
+
+-   There are bars that extend beyond the blue dashed significance bounds, indicating that there is autocorrelation in the residuals at various lags. This is a sign that there might be a temporal structure in the data that the model has not accounted for. But when autocorrelation lag extension is added to the model, residuals worsen. Further calibration is required.
+
+-   The histogram of the residuals with the overlaid normal density curve indicates a departure from normality with potential outliers, as seen by the tails.
+
+-   The Breusch-Godfrey test indicates the presence of autocorrelation in the residuals (p-value = 0.007619), which is consistent with the patterns seen in the ACF plot. This suggests that a simple linear model may not be sufficient to model the data and that time series analysis may be required.
+
+The regression model identifies a significant link between the presence of Arabic citizens and the housing prices in Istanbul, with the number of Arabic citizens positively impacting the logarithmic house prices. The pattern in the residuals and the ACF plot suggest the need for a more sophisticated time-series model to capture inherent autocorrelation. The presence of outliers and a potential departure from normality in the residuals could indicate extreme values or non-linearity in the relationship that are not addressed by the current model. Further investigation and possibly the incorporation of additional variables or transformations are recommended to improve the model's performance and address the autocorrelation observed in the residuals.
+
+# Model 4 - Bonus
+
+```{r}
+l_fit4.1 = lm(log(Istanbul_House_Sales) ~ Arabic_Citizenship,data=data0) #log-transform used to stabilze variance
+l_fit4.1
+summary(l_fit4.1)
+checkresiduals(l_fit4.1,12)
+```
+
+-   The **`Arabic_Citizenship`** variable is not a significant predictor of **`log(Istanbul_House_Sales)`** as the p-value (0.643) is much greater than the conventional significance level (e.g., 0.05).
+
+-   The Intercept is highly significant, but given the context of a logarithmic transformation, this mainly informs us about the scale of **`log(Istanbul_House_Sales)`** when **`Arabic_Citizenship`** is zero.
+
+-   The R-squared value is very low (0.004712), indicating that the model does not explain much of the variability in **`log(Istanbul_House_Sales)`**.
+
+-   The residuals plot shows some fluctuation around zero without a clear pattern, which might initially suggest a reasonable fit for a linear model.
+
+-   The ACF plot indicates that there may be some autocorrelation in the residuals given that some bars are beyond the blue dashed significance lines, especially at lower lags.
+
+-   The histogram of the residuals shows a distribution that has a peak away from the center, suggesting some skewness in the residuals.
+
+-   The Breusch-Godfrey test reveals a p-value of 0.03566, indicating that there is significant autocorrelation in the residuals. This suggests that the linear regression model might not be appropriate, and a time-series model that can account for autocorrelation should be considered.
+
+In this regression analysis of Istanbul's housing market, the number of Arabic citizens does not significantly influence the log of house sales, indicating that other factors may be at play in determining housing sales dynamics. Despite the significance of the Intercept, the model's explanatory power is minimal, as reflected by a low R-squared value.
+
+The presence of autocorrelation in the residuals, as detected by the Breusch-Godfrey test, suggests that house sales are influenced by more complex temporal dependencies than are captured in the current model. This warrants further exploration of time-series models or the inclusion of additional explanatory variables that could better account for the trends and cycles in the data. The residual analysis indicates potential model misspecification or omitted variable bias, highlighting the need for a more nuanced approach to understanding the factors driving house sales in Istanbul.
+
+# Model 5
+
+```{r}
+data0$Arabic_Citizenship_lag1 <- lag(data0$Arabic_Citizenship, 1)
+data0$Arabic_Citizenship_lag4 <- lag(data0$Arabic_Citizenship, 4)
+
+l_fit5.1 = lm(log(Arabic_Citizenship) ~ .,data=data0) #log-transform used to stabilze variance
+l_fit5.1
+summary(l_fit5.1)
+checkresiduals(l_fit5.1,12)
+
+```
+
+-   Most predictors are not statistically significant as their p-values exceed common significance levels, which suggests that they may not have strong individual predictive power for **`Arabic_Citizenship`**.
+
+-   **`Istanbul_House_Prices`** has a positive and significant coefficient at the 0.05 level, which indicates that increases in house prices in Istanbul are associated with an increase in the number of Arabic citizens.
+
+-   **`Arabic_Citizenship_lag4`** also has a significant negative coefficient, suggesting that there is a negative association between the number of Arabic citizens from four periods ago and the current period.
+
+-   The **`log(House_Prices)`** variable is not significant, which might be due to multicollinearity with **`Istanbul_House_Prices`** or it may not be a relevant predictor in the presence of other variables.
+
+-   The residuals plot doesn't show a clear pattern, which generally suggests that the model doesn't suffer from non-linearity or heteroscedasticity.
+
+-   The ACF plot shows some bars extending beyond the blue dashed significance bounds, which indicates autocorrelation in the residuals.
+
+-   The histogram of the residuals shows a distribution that appears close to normal, but a formal test for normality would be necessary for a more definitive conclusion.
+
+-   The significant result from the Breusch-Godfrey test (p-value = 0.02052) indicates that there is autocorrelation in the residuals, suggesting that the model might need to be expanded to account for temporal dependencies, such as including additional lagged terms or employing time series analysis methods.
+
+The regression results highlight **`Istanbul_House_Prices`** as a factor with a notable positive influence on the Arab population in Istanbul. This could reflect a trend of investment in real estate in Istanbul by Arabic citizens. The significant negative coefficient for **`Arabic_Citizenship_lag4`** could indicate that there was a decrease four periods ago that impacts current numbers, potentially due to economic or policy changes affecting migration or investment patterns.
+
+Despite the high R-squared value indicating that the model explains a significant portion of the variability, the presence of autocorrelation as revealed by the Breusch-Godfrey test indicates that a more refined model, possibly a time series model, would be more appropriate for capturing the dynamics affecting the Arab population in Istanbul. The significance of certain lagged variables underlines the importance of considering historical context when evaluating demographic changes.
+
+# Conclusion
+
+The initial the argument that some visitors greatly push up property prices and rental rates in Istanbul does not find strong support in the data, despite a thorough examination of multiple regression models and diagnostics. Although there are variations in the pricing and sales of houses, they don't seem to be statistically significantly connected with the number of tourists arriving from particular nations.
+
+Rather, the economic data indicate that the dynamics of the housing market are mostly driven by internal economic considerations. It seems that the cost of raw materials---which is probably impacted by currency rates and general economic conditions---has a greater bearing on home prices, which in turn affect rents. The property market in Turkey is exhibiting inconsistent patterns, which could lead to unforeseen variations in pricing and sales due to the country's declining economic welfare.
+
+A yearly increase in tourists from nations such as Iraq, Iran, Syria, and Afghanistan that is associated with rising property prices is not supported by the facts. Nonetheless, there is a noticeable rise in volume, indicating that although the rate of inbound tourists stays constant, there are more people from these nations entering. This pattern suggests that a number of economic factors, in addition to the rising number of tourists, also have an impact on the housing market's oscillations.
+
+In conclusion, it is more likely that Turkey's internal economic prospects and problems are responsible for the rise in property purchases and interest in rental properties among tourists from these regions. The increase in citizenship-related inquiries may indicate more the simplicity of the investing process than a primary goal of obtaining Turkish citizenship. The research indicates that rather than having an innate desire to settle in Turkey, these tourists are likely looking to make wise investments, possibly motivated by attractive conditions for international buyers.
+
+***Note:** Basic code faults and cohesiveness of comments are handled by Chat-GPT4.0.*
